@@ -1,0 +1,60 @@
+# ── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.Python
+
+# ── Environment / secrets ────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.local
+
+# ── Node / frontend ──────────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp
+.pnp.js
+
+# ── Uploads (user-submitted resumes) ─────────────────────────────
+interview/backend/uploads/
+
+# ── MLflow ───────────────────────────────────────────────────────
+mlruns/
+mlflow-artifacts/
+
+# ── Qdrant local storage ─────────────────────────────────────────
+qdrant_storage/
+
+# ── Logs ─────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS / editor ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Kubernetes secrets ───────────────────────────────────────────
+k8s/secrets.yaml

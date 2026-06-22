@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
@@ -21,7 +21,7 @@ const Dashboard = () => {
       }
 
       try {
-        const response = await axios.get(`http://localhost:5000/api/user/${userId}`);
+        const response = await api.get(`/api/user/${userId}`);
         setUserData(response.data);
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -32,8 +32,8 @@ const Dashboard = () => {
     const fetchJobs = async () => {
       try {
         const [jobsResponse, userApplicationsResponse] = await Promise.all([
-          axios.get('http://localhost:5000/api/job-openings'),
-          axios.get(`http://localhost:5000/api/user-applications/${userId}`)
+          api.get('/api/job-openings'),
+          api.get(`/api/user-applications/${userId}`)
         ]);
 
         const allJobs = jobsResponse.data;
@@ -65,15 +65,15 @@ const Dashboard = () => {
   const applyForJob = async (jobId) => {
     if (userData) {
       try {
-        await axios.post(`http://localhost:5000/api/job-openings/${jobId}/apply`, {
+        await api.post(`/api/job-openings/${jobId}/apply`, {
           userId: userId,
           email: userData.email
         });
 
         // Refetch jobs to update the lists
         const [jobsResponse, userApplicationsResponse] = await Promise.all([
-          axios.get('http://localhost:5000/api/job-openings'),
-          axios.get(`http://localhost:5000/api/user-applications/${userId}`)
+          api.get('/api/job-openings'),
+          api.get(`/api/user-applications/${userId}`)
         ]);
 
         const allJobs = jobsResponse.data;

@@ -1,106 +1,163 @@
-# Interview Assist
+# InterviewAssist
 
-## Description
-Interview Assist is an innovative application designed to automate the entire interview process, streamlining recruitment for both interviewers and candidates.
+An AI-powered recruitment platform that automates candidate screening using a LangGraph agentic pipeline, vector search, and LLM-based scoring.
 
-## Features
-- **Automated Scheduling:** Efficiently manage interview timeslots and candidate bookings.
-- **AI-Powered Question Generation:** Dynamic creation of relevant interview questions based on job descriptions and candidate profiles.
-- **Real-time Video Interviews:** Conduct seamless video interviews with integrated assessment tools.
-- **Candidate Evaluation:** Utilize AI algorithms to analyze candidate responses and provide objective feedback.
-- **Interview Recording:** Securely record and store interviews for future reference and analysis.
+## How it works
 
-## Installation
+When an employee triggers candidate scoring, the backend runs a multi-step LangGraph pipeline:
 
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v14 or later)
-- [Python 3.x](https://www.python.org/downloads/) (3.7 or later)
-- npm (usually comes with Node.js)
-- pip (Python package manager)
+1. **Intent Router** — classifies the query (screen / generate questions / compare)
+2. **Resume Screener** — LLM extracts structured scores from the candidate's profile
+3. **Qdrant Retriever** — hybrid dense + BM25 retrieval over the resume and job vector stores
+4. **Relevance Grader** — decides whether retrieved context is sufficient
+5. **Query Rewriter** — rewrites the query and retries retrieval if context is weak (up to 2 retries)
+6. **Answer Generator** — produces a final JSON score with explanation
+7. **RAGAS Evaluation** — faithfulness / relevancy metrics logged to MLflow after each run
 
-### Frontend Setup
+Expert matching runs in parallel via batch embedding similarity (zero LLM calls) to recommend the top 5 internal experts for the role.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/crockrocks/sih.git
-   cd sih/interview
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-   The application will now be running at `http://localhost:5174` (or another port if configured).
-
-### Backend Setup
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Create and activate a virtual environment:
-   - For Linux/macOS:
-     ```bash
-     python3 -m venv .venv
-     source .venv/bin/activate
-     ```
-   - For Windows:
-     ```bash
-     python -m venv .venv
-     .venv\Scripts\activate
-     ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run the Flask application:
-   ```bash
-   python3 app.py
-   ```
-
-   The backend will now be running at `http://localhost:5000`.
-
-## Project Structure
-
-```
-.
-├── src
-│   ├── components
-│   ├── assets
-├── public
-├── README.md
-├── backend
-    ├── app.py
-    ├── requirements.txt
-```
-
-## Technologies Used
+## Tech stack
 
 ### Frontend
-- React.js
-- Tailwind CSS
-- React Icons
+- React 18 + Vite
+- Tailwind CSS, Headless UI, Framer Motion
+- React Router v6, Axios
 
 ### Backend
-- Flask (Python)
-- Flask-RESTful for API routes
-- SQLAlchemy for database management
+- FastAPI + Uvicorn (async)
+- MongoDB via Motor (async driver)
+- LangGraph + LangChain — agentic screening pipeline
+- Groq AI (primary LLM) — optional local LLM via llama.cpp OpenAI-compatible server
+- Qdrant — vector store for resumes and job descriptions
+- fastembed (`BAAI/bge-small-en-v1.5`) — ONNX embeddings, no scikit-learn dependency
+- rank-bm25 — sparse retrieval for hybrid search
+- RAGAS — RAG evaluation (faithfulness, answer relevancy)
+- MLflow — experiment tracking for RAGAS scores
+- PyMuPDF — PDF text extraction
 
-## Contact
+### Infrastructure
+- Docker Compose — Qdrant, MLflow, FastAPI containers
+- Kubernetes — `k8s/` manifests for cloud deployment
 
-If you have any questions, suggestions, or need further assistance, please feel free to contact us:
+## Project structure
 
-- Email: harshpant3703@gmail.com
-- GitHub Issues: [Project Issues Page](https://github.com/crockrocks/sih/issues)
+```
+InterviewAssist/
+├── docker-compose.yml          # Qdrant + MLflow + FastAPI services
+├── k8s/                        # Kubernetes manifests
+│   ├── fastapi-deployment.yaml
+│   ├── mlflow-deployment.yaml
+│   ├── qdrant-deployment.yaml
+│   └── secrets.yaml            # gitignored — populate manually
+└── interview/
+    ├── src/
+    │   └── Components/         # React pages & UI components
+    ├── backend/
+    │   ├── main.py             # FastAPI app & all API routes
+    │   ├── config.py           # Env-driven configuration
+    │   ├── parse.py            # PDF extraction & resume parsing
+    │   ├── score.py            # Batch expert scoring via embeddings
+    │   ├── llm.py / llm_factory.py
+    │   ├── graph/              # LangGraph pipeline
+    │   │   ├── graph.py        # Graph definition & compilation
+    │   │   ├── nodes.py        # Node implementations
+    │   │   └── state.py        # ScreeningState TypedDict
+    │   ├── retrieval/          # Qdrant client & embedding helpers
+    │   ├── evaluation/         # RAGAS + MLflow logging
+    │   └── requirements.txt
+    └── package.json
+```
 
-## Acknowledgments
-- Thanks to all contributors who have helped shape Interview Assist.
+## Setup
+
+### Prerequisites
+- Node.js 18+
+- Python 3.10+
+- Docker & Docker Compose
+- MongoDB Atlas URI (or local MongoDB)
+- Groq API key
+
+### 1. Infrastructure (Qdrant + MLflow)
+
+```bash
+docker compose up -d qdrant mlflow
+```
+
+Qdrant REST: `http://localhost:6333`  
+MLflow UI: `http://localhost:5001`
+
+### 2. Backend
+
+```bash
+cd interview/backend
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+Create `interview/backend/.env`:
+
+```env
+MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/
+GROQ_AI_KEY=<your-groq-key>
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+MLFLOW_TRACKING_URI=http://localhost:5001
+# Optional — local LLM via llama.cpp
+USE_LOCAL_LLM=false
+LOCAL_LLM_URL=http://localhost:8080/v1
+LOCAL_LLM_MODEL=local
+```
+
+```bash
+uvicorn main:app --reload --port 8000
+```
+
+### 3. Frontend
+
+```bash
+cd interview
+npm install
+npm run dev
+```
+
+App runs at `http://localhost:5174`.
+
+### 4. Full stack via Docker Compose
+
+```bash
+# copy and fill in the root .env for the compose file
+cp interview/backend/.env .env
+docker compose up --build
+```
+
+## API overview
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/register` | Register candidate or employee |
+| POST | `/api/login` | Login |
+| POST | `/api/parse-resume` | Extract structured data from PDF |
+| POST | `/api/submit-interview` | Save candidate profile + upsert to Qdrant |
+| GET | `/api/job-openings` | List all job openings |
+| POST | `/api/job-openings` | Create job opening + upsert to Qdrant |
+| POST | `/api/job-openings/{id}/apply` | Apply for a job |
+| GET | `/api/score-candidate/{job_id}/{email}` | Run LangGraph screening pipeline |
+| POST | `/api/job-openings/{id}/select-candidate` | Mark candidate selected |
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MONGO_URI` | Yes | MongoDB connection string |
+| `GROQ_AI_KEY` | Yes (if not using local LLM) | Groq API key |
+| `QDRANT_HOST` | No | Defaults to `localhost` |
+| `QDRANT_PORT` | No | Defaults to `6333` |
+| `MLFLOW_TRACKING_URI` | No | Defaults to `http://localhost:5001` |
+| `USE_LOCAL_LLM` | No | `true` to use llama.cpp server |
+| `LOCAL_LLM_URL` | No | llama.cpp OpenAI-compatible base URL |
+| `LOCAL_LLM_MODEL` | No | Model name for local LLM |

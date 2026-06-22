@@ -1,132 +1,112 @@
 import fitz
 import re
-import os
 import json
-from langchain.chains.llm import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain_groq import ChatGroq
+from langchain_core.prompts import PromptTemplate
+from llm_factory import get_llm
 from config import Config
 
+
 def extract_text_from_pdf(pdf_path):
-    """Extracts all the text from a given PDF."""
     doc = fitz.open(pdf_path)
-    text = ""
+    text = ''
     for page in doc:
         text += page.get_text()
     return text
 
+
+# ──────────────────────────────────────────────────────────────
+# Phase 1: regex extraction — no LLM, instant
+# ──────────────────────────────────────────────────────────────
+
+def _extract_easy_fields(text):
+    email    = re.search(r'[\w.+-]+@[\w-]+\.[a-z]{2,}', text, re.I)
+    phone    = re.search(r'(\+?[\d][\d\s\-(). ]{7,14}[\d])', text)
+    linkedin = re.search(r'(?:https?://)?(?:www\.)?linkedin\.com/in/[\w-]+', text, re.I)
+    github   = re.search(r'(?:https?://)?(?:www\.)?github\.com/[\w-]+', text, re.I)
+    return {
+        'Email':        email.group().strip()    if email    else '',
+        'Phone':        phone.group().strip()    if phone    else '',
+        'LinkedIn URL': linkedin.group().strip() if linkedin else '',
+        'GitHub URL':   github.group().strip()   if github   else '',
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# Phase 2: LLM for structured fields only (easy fields excluded)
+# ──────────────────────────────────────────────────────────────
+
+_PARSE_PROMPT = PromptTemplate(
+    template="""You are a resume parser. Extract structured information from the resume below.
+
+Return a JSON object with exactly these fields:
+- Name: full name
+- Position: job title if mentioned, else empty string
+- Skills: array of technical and professional skills
+- Experiences: array of objects with keys company, duration, responsibilities (array of strings)
+- Education: array of objects with keys institution, degree, year
+- Projects: array of objects with keys name, details (array of strings)
+- Certifications: string, one per line
+
+Return ONLY valid JSON. No explanation, no markdown.
+
+Resume:
+{resume_text}""",
+    input_variables=['resume_text'],
+)
+
+
 def initialize_llm():
-    os.environ["GROQ_API_KEY"] = Config.GROQ_AI_KEY
-    return ChatGroq(
-        model="llama-3.1-70b-versatile",
-        temperature=0,
-        max_tokens=None,
-        timeout=None,
-        max_retries=2,
-    )
-
-def create_prompt_template():
-    prompt_template = """
-    You are an expert resume parser. Your task is to extract relevant information from the given resume text and format it according to the specified structure. Resume text may vary in format, so please extract the information based on the following definitions.
-
-    - Name: Usually the first line, typically a person’s name.
-    - Email: Text containing '@'.
-    - Phone: Typically a number starting with a '+' sign or a 10-digit number.
-    - Position: Mentioned job title, if any.
-    - LinkedIn URL: URL starting with 'linkedin.com'.
-    - GitHub URL: URL starting with 'github.com'.
-    - Skills: A list of skills, often under headings like 'Skills' or 'Technical Skills'.
-    - Experiences: A list of professional experiences, often under headings like 'Experience', with details about company, duration, and responsibilities.
-    - Education: A list of educational qualifications, often under 'Education' heading, with institution name, degree, and year.
-    - Projects: A list of projects, typically with a name and brief description.
-    - Certifications: Certifications or courses completed, if mentioned.
-
-    Extract and format the following information:
-
-    1. Name
-    2. Email
-    3. Phone
-    4. Position (if mentioned, otherwise leave blank)
-    5. LinkedIn URL
-    6. GitHub URL
-    7. Skills (as a list)
-    8. Experiences (as a list of dictionaries with company, duration, and responsibilities)
-    9. Education (as a list of dictionaries with institution, degree, and year)
-    10. Projects (as a list of dictionaries with name and details)
-    11. Certifications (as a string, each on a new line)
-    12. Cover Letter (if present, otherwise leave blank)
-
-    Please return the output as a JSON object that can be directly parsed by a web application. Ensure all fields are present, even if some are empty.
-
-    Resume Text:
-    {resume_text}
-
-    """
-    return PromptTemplate(
-        template=prompt_template,
-        input_variables=["resume_text"]
-    )
-
-def initialize_llm_chain(llm, prompt_template):
-    return LLMChain(llm=llm, prompt=prompt_template, verbose=True)
-
+    return get_llm()
 
 
 def parse_resume(text):
-    llm = initialize_llm()
-    prompt_template = create_prompt_template()
-    llm_chain = initialize_llm_chain(llm, prompt_template)
-    response = llm_chain.invoke({"resume_text": text})
-    raw_response = response.get('text', '')
-    if not raw_response:
-        print("Error: LLM did not return any text.")
-        return {}
-    clean_response = re.sub(r'```(?:json)?', '', raw_response).strip()
+    # Phase 1: trivial fields via regex
+    easy_fields = _extract_easy_fields(text)
+
+    # Phase 2: LLM on truncated text for structured fields
+    llm       = get_llm()
+    truncated = text[:Config.MAX_RESUME_TEXT_CHARS]
+    response  = (_PARSE_PROMPT | llm).invoke({'resume_text': truncated})
+    raw       = response.content if hasattr(response, 'content') else ''
+
+    if not raw:
+        return {**easy_fields}
+
+    clean = re.sub(r'```(?:json)?', '', raw).strip()
     try:
-        json_start = clean_response.find('{')
-        json_end = clean_response.rfind('}') + 1
-
-        if json_start == -1 or json_end == -1:
-            raise ValueError("No valid JSON found in the response.")
-
-        json_content = clean_response[json_start:json_end]
-        parsed_data = json.loads(json_content)
-        return parsed_data
+        j_start = clean.find('{')
+        j_end   = clean.rfind('}') + 1
+        if j_start == -1 or j_end == 0:
+            raise ValueError('No JSON found')
+        parsed = json.loads(clean[j_start:j_end])
     except (json.JSONDecodeError, ValueError) as e:
-        print(f"JSON parsing failed: {e}")
-    print("Unable to parse the response.")
-    return {}
+        print(f'JSON parsing failed: {e}')
+        parsed = {}
+
+    _normalise_parsed(parsed)
+
+    # Regex results override LLM for trivial fields
+    for field, value in easy_fields.items():
+        if value:
+            parsed[field] = value
+
+    return parsed
 
 
-def save_parsed_resume(parsed_data):
-    """Saves the parsed resume data to a JSON file."""
-    name = parsed_data.get("name", "Unknown")
-    file_name = f"{name}_parsed_resume.json" if name else "parsed_resume.json"
+def _normalise_parsed(data: dict) -> None:
+    """Normalise nested object keys to lowercase in-place.
 
-    with open(file_name, "w", encoding="utf-8") as file:
-        json.dump(parsed_data, file, indent=2)
-
-    print(f"Resume details saved to {file_name}")
-
-
-if __name__ == "__main__":
-    resume_text = """
-    Random random
-    Random
-    Ó 182091283
-    R random@gmail.com
-    EXPERIENCE
-    PharynxAI
-    June 2024 – Present
-    • Junior AI/ML Engineer, Designed Generative AI workflows using ComfyUI, enhancing tasks such as cloth inpainting, image
-    upscaling, and video creation, leading to a 20% increase in processing efficiency.
-    • Refined open-source projects by optimizing code, integrating state-of-the-art models, and implementing solutions on platforms
-    like Runpod and Hugging Face, reducing deployment time by 30%.
-    Deepmindz Innovations
-    Jan 2024 – June 2024
-    • AI/ML Intern, Contributed to developing and optimizing Generative AI workflows using ComfyUI and Automatic 1111, which
-    improved image generation and upscaling quality.
+    The LLM sometimes returns PascalCase keys (Company, Duration, …) even
+    though the prompt asks for lowercase. This guarantees a stable contract
+    so the frontend never has to guess the casing.
     """
-
-    parsed_resume = parse_resume(resume_text)
-    save_parsed_resume(parsed_resume)
+    key_map = {
+        'Company': 'company', 'Duration': 'duration', 'Responsibilities': 'responsibilities',
+        'Institution': 'institution', 'Degree': 'degree', 'Year': 'year',
+        'Name': 'name', 'Details': 'details',
+    }
+    for section in ('Experiences', 'Education', 'Projects'):
+        for item in data.get(section) or []:
+            for old, new in key_map.items():
+                if old in item:
+                    item[new] = item.pop(old)

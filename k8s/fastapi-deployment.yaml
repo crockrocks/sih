@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interviewassist-fastapi
+  namespace: default
+  labels:
+    app: interviewassist-fastapi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: interviewassist-fastapi
+  template:
+    metadata:
+      labels:
+        app: interviewassist-fastapi
+    spec:
+      containers:
+        - name: fastapi
+          image: interviewassist-fastapi:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: interviewassist-secrets
+                  key: mongo-uri
+            - name: GROQ_AI_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: interviewassist-secrets
+                  key: groq-api-key
+            - name: QDRANT_HOST
+              value: "qdrant-service"
+            - name: QDRANT_PORT
+              value: "6333"
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow-service:5000"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-service
+  namespace: default
+spec:
+  selector:
+    app: interviewassist-fastapi
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

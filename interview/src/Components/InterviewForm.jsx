@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaPlus, FaEdit, FaTrash, FaLinkedin, FaGithub, FaFileUpload } from 'react-icons/fa';
-import axios from 'axios';
+import api from '../api';
 import {
   Card,
   CardHeader,
@@ -140,10 +140,10 @@ const ProjectCard = ({ project, onEdit, onDelete, darkMode }) => {
           {isEditing ? 'Edit Project' : project.name || 'New Project'}
         </h3>
         <div>
-          <Button variant="ghost" size="icon" onClick={() => setIsEditing(!isEditing)}>
+          <Button type="button" variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); setIsEditing(!isEditing); }}>
             <FaEdit />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onDelete}>
+          <Button type="button" variant="ghost" size="icon" onClick={(e) => { e.preventDefault(); onDelete(); }}>
             <FaTrash />
           </Button>
         </div>
@@ -224,7 +224,7 @@ const SkillsCard = ({ skills, availableSkills, onAddSkill, onRemoveSkill }) => {
 function InterviewForm({ darkMode, onLogout }) {
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
+    email: localStorage.getItem('userEmail') || '',
     phone: '',
     position: '',
     coverLetter: '',
@@ -335,11 +335,11 @@ function InterviewForm({ darkMode, onLogout }) {
     const file = e.target.files[0];
     if (file) {
       setLoading(true);
-      const formData = new FormData();
-      formData.append('resume', file);
+      const uploadData = new FormData();
+      uploadData.append('resume', file);
 
       try {
-        const response = await axios.post('http://localhost:5000/api/parse-resume', formData, {
+        const response = await api.post('/api/parse-resume', uploadData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -351,7 +351,6 @@ function InterviewForm({ darkMode, onLogout }) {
           setFormData(prev => ({
             ...prev,
             name: parsedData.Name || '',
-            email: parsedData.Email || '',
             phone: parsedData.Phone || '',
             position: parsedData.Position || '',
             linkedin: parsedData['LinkedIn URL'] || '',
@@ -359,22 +358,24 @@ function InterviewForm({ darkMode, onLogout }) {
             skills: Array.isArray(parsedData.Skills) ? parsedData.Skills : [],
             experiences: Array.isArray(parsedData.Experiences)
               ? parsedData.Experiences.map(exp => ({
-                company: exp.Company || '',
-                duration: exp.Duration || '',
-                responsibilities: Array.isArray(exp.Responsibilities) ? exp.Responsibilities : []
+                company: exp.company || exp.Company || '',
+                duration: exp.duration || exp.Duration || '',
+                responsibilities: Array.isArray(exp.responsibilities) ? exp.responsibilities
+                  : Array.isArray(exp.Responsibilities) ? exp.Responsibilities : []
               }))
               : [],
             educations: Array.isArray(parsedData.Education)
               ? parsedData.Education.map(edu => ({
-                institution: edu.Institution || '',
-                degree: edu.Degree || '',
-                year: edu.Year || ''
+                institution: edu.institution || edu.Institution || '',
+                degree: edu.degree || edu.Degree || '',
+                year: edu.year || edu.Year || ''
               }))
               : [],
-              projects: Array.isArray(parsedData.Projects)
+            projects: Array.isArray(parsedData.Projects)
               ? parsedData.Projects.map(proj => ({
-                  name: proj.Name || '',
-                  details: Array.isArray(proj.Details) ? proj.Details : [proj.Details || '']
+                  name: proj.name || proj.Name || '',
+                  details: Array.isArray(proj.details) ? proj.details
+                    : Array.isArray(proj.Details) ? proj.Details : [proj.details || proj.Details || '']
                 }))
               : [],
             certifications: parsedData.Certifications || '',
@@ -419,7 +420,7 @@ function InterviewForm({ darkMode, onLogout }) {
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/submit-interview', submitFormData, {
+      const response = await api.post('/api/submit-interview', submitFormData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

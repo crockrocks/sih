@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../api';
 import { useNavigate } from 'react-router-dom';
 
 function LoginForm({ onAlternateLoginSuccess, darkMode }) {
@@ -44,11 +44,12 @@ function LoginForm({ onAlternateLoginSuccess, darkMode }) {
       }
   
       try {
-        const response = await axios.post('http://localhost:5000/api/login', { email, password });
+        const response = await api.post('/api/login', { email, password });
         if (response.data.success) {
           if (response.data.resumeData) {
             localStorage.setItem('userResumeData', JSON.stringify(response.data.resumeData));
           }
+          localStorage.setItem('userEmail', email);
           navigate(`/dashboard/${response.data.userId}`);
         } else {
           setMessage(response.data.message || 'Login failed');
@@ -65,7 +66,7 @@ function LoginForm({ onAlternateLoginSuccess, darkMode }) {
       }
   
       try {
-        const response = await axios.post('http://127.0.0.1:5000/api/register', {
+        const response = await api.post('/api/register', {
           name,
           email,
           password,
@@ -78,6 +79,7 @@ function LoginForm({ onAlternateLoginSuccess, darkMode }) {
           if (response.data.is_employee) {
             setMessage(prevMessage => `${prevMessage} Employee code: ${response.data.employee_code}`);
           }
+          localStorage.setItem('userEmail', email);
           navigate('/interview');
         } else {
           setMessage(response.data.message || 'Sign-up failed');

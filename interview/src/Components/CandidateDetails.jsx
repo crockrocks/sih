@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Check, X, Calendar, Mail, Phone, Github, Linkedin, ChevronDown, ChevronUp } from 'lucide-react';
-import axios from 'axios';
+import api from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
 import TopExpertsDisplay from './TopExperts';
 import ScoreDisplay from './ScoreDisplay';
@@ -74,14 +74,16 @@ const CandidateCard = ({ candidate, jobId, onSelect, onReject, onSchedule,darkMo
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [scoreData, setScoreData] = useState(null);
     const [topExperts, setTopExperts] = useState([]);
+    const [explanation, setExplanation] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const fetchScoreData = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.get(`http://localhost:5000/api/score-candidate/${jobId}/${candidate.email}`);
+            const response = await api.get(`/api/score-candidate/${jobId}/${candidate.email}`);
             setScoreData(response.data.matchResult);
-            setTopExperts(response.data.topExperts);
+            setTopExperts(response.data.topExperts || []);
+            setExplanation(response.data.explanation || '');
         } catch (error) {
             console.error('Error fetching score data:', error);
         } finally {
@@ -143,7 +145,7 @@ const CandidateCard = ({ candidate, jobId, onSelect, onReject, onSchedule,darkMo
             ) : scoreData ? (
                 <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-md">
                     <h4 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">Match Scores</h4>
-                    <ScoreDisplay scoreData={scoreData} isLoading={false} darkMode={darkMode} />
+                    <ScoreDisplay scoreData={scoreData} explanation={explanation} isLoading={false} darkMode={darkMode} />
                 </div>
             ) : null}
 
@@ -174,13 +176,13 @@ const CandidateCard = ({ candidate, jobId, onSelect, onReject, onSchedule,darkMo
                 <h2 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">{candidate.name}</h2>
                 <ExpandableSection
                     title="Skills"
-                    content={<p className="text-gray-700 dark:text-gray-300">{candidate.resumeData?.skills.join(', ')}</p>}
+                    content={<p className="text-gray-700 dark:text-gray-300">{candidate.resumeData?.skills?.join(', ')}</p>}
                 />
                 <ExpandableSection
                     title="Experience"
                     content={
                         <div>
-                            {candidate.resumeData?.experiences.map((exp, index) => (
+                            {candidate.resumeData?.experiences?.map((exp, index) => (
                                 <div key={index} className="mb-4">
                                     <p className="font-medium text-gray-800 dark:text-gray-200">{exp.company}</p>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">{exp.duration}</p>
@@ -200,7 +202,7 @@ const CandidateCard = ({ candidate, jobId, onSelect, onReject, onSchedule,darkMo
                     title="Projects"
                     content={
                         <div>
-                            {candidate.resumeData?.projects.map((project, index) => (
+                            {candidate.resumeData?.projects?.map((project, index) => (
                                 <div key={index} className="mb-4">
                                     <p className="font-medium text-gray-800 dark:text-gray-200">{project.name}</p>
                                     <ul className="list-disc pl-5 mt-2">
@@ -234,7 +236,7 @@ const CandidateDetailsPage = () => {
     useEffect(() => {
         const fetchJobDetails = async () => {
             try {
-                const response = await axios.get(`http://localhost:5000/api/job-openings/${jobId}`);
+                const response = await api.get(`/api/job-openings/${jobId}`);
                 setJobDetails(response.data);
                 fetchCandidates();
             } catch (error) {
@@ -246,7 +248,7 @@ const CandidateDetailsPage = () => {
 
     const fetchCandidates = async () => {
         try {
-            const response = await axios.get(`http://localhost:5000/api/job-openings/${jobId}/candidates`);
+            const response = await api.get(`/api/job-openings/${jobId}/candidates`);
             setCandidates(response.data);
         } catch (error) {
             console.error('Error fetching candidates:', error);
@@ -255,7 +257,7 @@ const CandidateDetailsPage = () => {
 
     const handleSelect = async (candidate) => {
         try {
-            await axios.post(`http://localhost:5000/api/job-openings/${jobId}/select-candidate`, { email: candidate.email });
+            await api.post(`/api/job-openings/${jobId}/select-candidate`, { email: candidate.email });
             fetchCandidates();
         } catch (error) {
             console.error('Error selecting candidate:', error);
@@ -264,7 +266,7 @@ const CandidateDetailsPage = () => {
 
     const handleReject = async (candidate) => {
         try {
-            await axios.post(`http://localhost:5000/api/job-openings/${jobId}/reject-candidate`, { email: candidate.email });
+            await api.post(`/api/job-openings/${jobId}/reject-candidate`, { email: candidate.email });
             fetchCandidates();
         } catch (error) {
             console.error('Error rejecting candidate:', error);

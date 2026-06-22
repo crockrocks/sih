@@ -10,6 +10,35 @@ class Config:
     UPLOAD_FOLDER = 'uploads'
     GROQ_AI_KEY = os.environ.get('GROQ_AI_KEY')
 
+    # Local LLM (llama.cpp server — OpenAI-compatible)
+    USE_LOCAL_LLM = os.environ.get('USE_LOCAL_LLM', 'false').lower() == 'true'
+    LOCAL_LLM_URL = os.environ.get('LOCAL_LLM_URL', 'http://localhost:8080/v1')
+    LOCAL_LLM_MODEL = os.environ.get('LOCAL_LLM_MODEL', 'local')
+
+    # Qdrant
+    QDRANT_HOST = os.environ.get('QDRANT_HOST', 'localhost')
+    QDRANT_PORT = int(os.environ.get('QDRANT_PORT', '6333'))
+    QDRANT_RESUMES_COLLECTION = 'resumes'
+    QDRANT_JOBS_COLLECTION = 'job_descriptions'
+
+    # Embeddings (fastembed / ONNX — no scikit-learn dependency)
+    EMBEDDING_MODEL = 'BAAI/bge-small-en-v1.5'
+    DENSE_VECTOR_SIZE = 384
+
+    # MLflow
+    MLFLOW_TRACKING_URI = os.environ.get('MLFLOW_TRACKING_URI', 'http://localhost:5001')
+    MLFLOW_EXPERIMENT_NAME = 'interview_assist_screening'
+
+    # LangGraph
+    MAX_RETRIEVAL_RETRIES = 2
+
+    # Context budget — keeps every LLM call well under local model limits
+    MAX_RESUME_TEXT_CHARS = 8000   # raw PDF text fed to parse.py
+    MAX_JOB_DESC_CHARS    = 800    # job description in any prompt
+    MAX_PROFILE_CHARS     = 1000   # formatted candidate/expert profile
+    MAX_CONTEXT_CHARS_PER_DOC = 400  # each Qdrant retrieved document
+    MAX_EXPERT_CANDIDATES = 3      # experts passed to LLM (rest ranked by embeddings)
+
     TABLE_SCHEMA = {
         "_id": "ObjectId",
         "name": "string",

@@ -2,7 +2,7 @@ import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import { motion } from "framer-motion";
 
-const ScoreDisplay = ({ scoreData, isLoading, darkMode }) => {
+const ScoreDisplay = ({ scoreData, explanation, isLoading, darkMode }) => {
     // Define colors based on the theme
     const textColor = darkMode ? "#E2E8F0" : "#2D3748"; // Light mode and dark mode text colors
     const pathColor = darkMode ? "#63B3ED" : "#3182CE"; // Adjust circle color for dark mode and light mode
@@ -43,6 +43,12 @@ const ScoreDisplay = ({ scoreData, isLoading, darkMode }) => {
                         {renderScoreCircle("Profile Score", scoreData["Profile Score"])}
                         {renderScoreCircle("Overall Score", scoreData["Overall Score"])}
                     </div>
+                    {explanation && (
+                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md text-sm text-gray-700 dark:text-gray-300">
+                            <p className="font-semibold mb-1 text-gray-900 dark:text-white">Why this score?</p>
+                            <p>{explanation}</p>
+                        </div>
+                    )}
                 </div>
             ) : null}
         </div>

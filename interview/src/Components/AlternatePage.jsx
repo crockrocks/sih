@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Edit, Trash2, X, ChevronRight } from 'lucide-react';
-import axios from 'axios';
+import api from '../api';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const CustomButton = ({ children, variant = 'primary', onClick, className = '' }) => {
@@ -57,7 +57,7 @@ const AlternatePage = () => {
 
   const fetchJobs = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/job-openings');
+      const response = await api.get('/api/job-openings');
       setJobs(response.data);
     } catch (error) {
       console.error('Error fetching jobs:', error);
@@ -85,10 +85,10 @@ const AlternatePage = () => {
     if (newJob.title && newJob.company && newJob.shortDescription) {
       try {
         if (selectedJob) {
-          await axios.put(`http://localhost:5000/api/job-openings/${selectedJob._id}`, newJob);
+          await api.put(`/api/job-openings/${selectedJob._id}`, newJob);
           showMessage('Job opening updated successfully!');
         } else {
-          await axios.post('http://localhost:5000/api/job-openings', newJob);
+          await api.post('/api/job-openings', newJob);
           showMessage('New job opening created successfully!');
         }
         fetchJobs();
@@ -102,7 +102,7 @@ const AlternatePage = () => {
 
   const deleteJob = async (jobId) => {
     try {
-      await axios.delete(`http://localhost:5000/api/job-openings/${jobId}`);
+      await api.delete(`/api/job-openings/${jobId}`);
       showMessage('Job opening deleted successfully!');
       fetchJobs();
     } catch (error) {

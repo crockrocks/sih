@@ -1,24 +1,14 @@
-from langchain.chains.llm import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 import json
-import re
 import pymongo
-import os
 import sys
 from bson import ObjectId
 from config import Config
-from langchain_groq import ChatGroq
+from llm_factory import get_llm
 
 
 def initialize_llm():
-    os.environ["GROQ_API_KEY"] = Config.GROQ_AI_KEY
-    return ChatGroq(
-        model="mixtral-8x7b-32768",
-        temperature=0,
-        max_tokens=None,
-        timeout=None,
-        max_retries=2,
-    )
+    return get_llm()
 
 def create_prompt_template():
     prompt_template = """
@@ -59,7 +49,7 @@ def create_prompt_template():
 
 
 def initialize_llm_chain(llm, prompt_template):
-    return LLMChain(llm=llm, prompt=prompt_template, verbose=True)
+    return prompt_template | llm
 
 
 def make_serializable(data):
@@ -91,7 +81,7 @@ def generate_summary(candidate_data):
     })
 
     # Clean up and return the response
-    response_text = response['text'].replace("Output: ", "")
+    response_text = response.content.replace("Output: ", "")
     return response_text.strip()
 
 # Retrieve the candidate collection from MongoDB
